@@ -154,7 +154,7 @@ private:
     {
         beginTest ("Programs map to the factory presets");
         buscomp::BusCompProcessor proc;
-        expect (proc.getNumPrograms() == 6);
+        expect (proc.getNumPrograms() == 8);
         proc.setCurrentProgram (1); // Drum Bus
         expect (proc.getCurrentProgram() == 1);
         expect (std::fabs (proc.getParamValue ("ratio") - 4.0f) < 0.05f);

@@ -40,12 +40,12 @@ jobs:
         shell: powershell
         run: |
           Compress-Archive -Path "build/BusComp_artefacts/Release/VST3/BUS COMP.vst3" `
-                           -DestinationPath "BUS_COMP_VST3_Windows_x64.zip" -Force
-          if (!(Test-Path "BUS_COMP_VST3_Windows_x64.zip")) { throw "zip failed" }
+                           -DestinationPath "BUS_COMP_Clean_Color_Windows_x64.zip" -Force
+          if (!(Test-Path "BUS_COMP_Clean_Color_Windows_x64.zip")) { throw "zip failed" }
 
-      - name: Upload artifact BUS_COMP_VST3_Windows_x64
+      - name: Upload artifact BUS_COMP_Clean_Color_Windows_x64
         uses: actions/upload-artifact@v4.5.0
         with:
-          name: BUS_COMP_VST3_Windows_x64
-          path: BUS_COMP_VST3_Windows_x64.zip
+          name: BUS_COMP_Clean_Color_Windows_x64
+          path: BUS_COMP_Clean_Color_Windows_x64.zip
           retention-days: 30

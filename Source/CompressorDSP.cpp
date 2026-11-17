@@ -21,6 +21,8 @@ void CompressorDSP::prepare (double newSampleRate, int newMaxBlock, int newNumCh
     numChannels = juce::jlimit (1, maxChannels, newNumChannels);
 
     scFilter.prepare (sampleRate, maxChannels);
+    colorStage.prepare (sampleRate);
+    clipper.prepare (sampleRate);
 
     os2.initProcessing ((size_t) maxBlock);
     os4.initProcessing ((size_t) maxBlock);
@@ -29,19 +31,6 @@ void CompressorDSP::prepare (double newSampleRate, int newMaxBlock, int newNumCh
 
     coreBuffer.setSize (maxChannels, maxBlock * 4, false, false, true);
     coreBuffer.clear();
-    drySource.setSize (maxChannels, maxBlock, false, false, true);
-    drySource.clear();
-
-    // dry delay: big enough for the 4x oversampling latency (integer latency mode)
-    int maxDelay = (int) std::ceil (os4.getLatencyInSamples()) + 4;
-    int ringSize = 1;
-    while (ringSize < maxDelay)
-        ringSize <<= 1;
-    dryMask = ringSize - 1;
-    for (int ch = 0; ch < maxChannels; ++ch)
-        dryRing[ch].assign ((size_t) ringSize, 0.0f);
-    dryWrite = 0;
-    dryDelay = 0;
 
     inputMeter.prepare (sampleRate);
     outputMeter.prepare (sampleRate);
@@ -53,11 +42,7 @@ void CompressorDSP::prepare (double newSampleRate, int newMaxBlock, int newNumCh
 void CompressorDSP::reset()
 {
     for (int ch = 0; ch < maxChannels; ++ch)
-    {
         gr[ch] = 0.0f;
-        std::fill (dryRing[ch].begin(), dryRing[ch].end(), 0.0f);
-    }
-    dryWrite = 0;
     holdTime = 0.0f;
     tRelSmoothed = tRelease.load();
     inRms = outRms = smAutoMakeup = 0.0f;
@@ -66,6 +51,8 @@ void CompressorDSP::reset()
     smMakeup = tMakeup.load();       smMix = tMix.load();
     smLink = tLink.load();           smScHpf = tScHpf.load();
     scFilter.reset();
+    colorStage.reset();
+    clipper.reset();
     os2.reset();
     os4.reset();
     inputMeter.reset();
@@ -86,6 +73,17 @@ void CompressorDSP::setSettings (const Settings& s)
     tLink.store (s.stereoLink, std::memory_order_relaxed);
     tScHpf.store (s.scHpfHz, std::memory_order_relaxed);
     tSoftKnee.store (s.softKnee, std::memory_order_relaxed);
+    tColorMode.store (s.colorMode, std::memory_order_relaxed);
+    tColorAmount.store (s.colorAmount, std::memory_order_relaxed);
+    tSoftClip.store (s.softClipOn, std::memory_order_relaxed);
+    tClipThreshold.store (s.clipThresholdDb, std::memory_order_relaxed);
+    tClipKnee.store (s.clipKnee, std::memory_order_relaxed);
+
+    colorStage.setEnabled (s.colorMode);
+    colorStage.setAmount (s.colorAmount);
+    clipper.setEnabled (s.softClipOn);
+    clipper.setThresholdDb (s.clipThresholdDb);
+    clipper.setKnee (s.clipKnee);
 }
 
 void CompressorDSP::setOversamplingMode (int stages) noexcept
@@ -112,33 +110,9 @@ void CompressorDSP::applyOversamplingMode (int mode)
 {
     activeMode.store (mode, std::memory_order_release);
     if (mode == 1)
-    {
         os2.reset();
-        dryDelay = (int) std::ceil (os2.getLatencyInSamples());
-    }
     else if (mode == 2)
-    {
         os4.reset();
-        dryDelay = (int) std::ceil (os4.getLatencyInSamples());
-    }
-    else
-    {
-        dryDelay = 0;
-    }
-    for (int ch = 0; ch < maxChannels; ++ch)
-        std::fill (dryRing[ch].begin(), dryRing[ch].end(), 0.0f);
-    dryWrite = 0;
-}
-
-void CompressorDSP::pushDry (int ch, float x) noexcept
-{
-    dryRing[ch][(size_t) dryWrite] = x;
-}
-
-float CompressorDSP::popDry (int ch) noexcept
-{
-    const int read = (dryWrite - dryDelay) & dryMask;
-    return dryRing[ch][(size_t) read];
 }
 
 float CompressorDSP::gainComputer (float levelDb, float thresholdDb, float ratio, bool softKnee) noexcept
@@ -174,11 +148,6 @@ void CompressorDSP::process (juce::AudioBuffer<float>& buffer)
     for (int ch = 0; ch < numCh; ++ch)
         inputMeter.processChannel (ch, buffer.getReadPointer (ch), n);
 
-    // keep an untouched copy of the dry signal for the parallel mix
-    drySource.clear (0, n);
-    for (int ch = 0; ch < numCh; ++ch)
-        drySource.copyFrom (ch, 0, buffer.getReadPointer (ch), n);
-
     if (mode == 0)
     {
         juce::dsp::AudioBlock<float> block (buffer);
@@ -194,26 +163,11 @@ void CompressorDSP::process (juce::AudioBuffer<float>& buffer)
 
         juce::dsp::AudioBlock<float> coreBlock (coreBuffer);
         coreBlock = coreBlock.getSubBlock (0, (size_t) n); // only the current block
-        auto upBlock = os->processSamplesUp (coreBlock); // mutable view, internal buffer
+        auto upBlock = os->processSamplesUp (coreBlock);    // mutable view, internal buffer
         processCore (upBlock, sampleRate * (mode == 1 ? 2.0 : 4.0));
 
         juce::dsp::AudioBlock<float> outBlock (buffer);
         os->processSamplesDown (outBlock);
-    }
-
-    // parallel mix with the latency-aligned dry signal (linear mix; at 100%
-    // no dry signal is added, at 0% the dry path is passed through untouched)
-    for (int i = 0; i < n; ++i)
-    {
-        for (int ch = 0; ch < numCh; ++ch)
-        {
-            pushDry (ch, drySource.getSample (ch, i));
-            const float dry = popDry (ch);
-            const float wet = buffer.getSample (ch, i);
-            buffer.setSample (ch, i, wet * smMix + dry * (1.0f - smMix));
-        }
-        ++dryWrite;
-        dryWrite &= dryMask;
     }
 
     for (int ch = 0; ch < numCh; ++ch)
@@ -313,14 +267,24 @@ void CompressorDSP::processCore (juce::dsp::AudioBlock<float>& block, double rat
 
             float wet = x[ch] * std::pow (10.0f, -gr[ch] / 20.0f);
 
-            // auto-gain measurement: dry input RMS vs. compressed (pre-makeup) RMS
+            // CLEAN = passthrough, COLOR = soft saturation (shared oversampling chain)
+            wet = colorStage.processSample (wet, rate);
+
+            // auto-gain measurement: dry input RMS vs. wet (post-color, pre-mix) RMS
             inRms  += (x[ch] * x[ch] - inRms) * rmsCoeff;
             outRms += (wet * wet - outRms) * rmsCoeff;
 
-            const float makeupDb = smMakeup + (autoGainOn ? smAutoMakeup : 0.0f);
-            wet *= std::pow (10.0f, makeupDb / 20.0f);
+            // parallel mix: linear, 100% = wet only, 0% = dry only
+            float mixed = wet * smMix + x[ch] * (1.0f - smMix);
 
-            block.setSample (ch, i, wet);
+            // optional soft clipper (post-mix, pre-makeup)
+            mixed = clipper.processSample (mixed, rate);
+
+            // final output gain: manual makeup + optional auto makeup
+            const float makeupDb = smMakeup + (autoGainOn ? smAutoMakeup : 0.0f);
+            mixed *= std::pow (10.0f, makeupDb / 20.0f);
+
+            block.setSample (ch, i, mixed);
         }
 
         // auto makeup from the measured level difference; clamped to 0..+12 dB

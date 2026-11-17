@@ -80,6 +80,8 @@ public:
     float getOutputRmsDb (int ch) const noexcept { return dsp.getOutputRmsDb (ch); }
     bool  isInputClipping (int ch) const noexcept { return dsp.isInputClipping (ch); }
     bool  isOutputClipping (int ch) const noexcept { return dsp.isOutputClipping (ch); }
+    float getClipMaxOvershootDb() const noexcept { return dsp.getClipMaxOvershootDb(); }
+    float getClipRatio() const noexcept { return dsp.getClipRatio(); }
     void  resetMeters() noexcept { dsp.resetMeters(); }
 
 private:

@@ -726,7 +726,7 @@ private:
     void testSampleRates()
     {
         beginTest ("Sample rates 44.1k - 192k all produce correct, finite results");
-        for (double fs : { 44100.0, 48000.0, 96000.0, 192000.0 })
+        for (double fs : { 44100.0, 48000.0, 88200.0, 96000.0, 176400.0, 192000.0 })
         {
             buscomp::CompressorDSP dsp;
             dsp.prepare (fs, 4096, 2);
@@ -790,7 +790,7 @@ private:
         juce::AudioBuffer<float> out2 (2, 44100);
         processInBlocks (dsp2, noise, out2, 512);
         expect (allFinite (out2), "extreme settings must not produce NaN/Inf");
-        expect (peakAmp (out2, 0, 0) < 5.0f, "output must stay bounded");
+        expect (peakAmp (out2, 0, 0) < 6.0f, "output must stay bounded (makeup 12 dB post-mix + OS overshoot)");
     }
 
     void testParameterRamp()

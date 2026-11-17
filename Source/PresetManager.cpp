@@ -14,7 +14,7 @@ PresetManager::PresetManager()
         { "threshold", -20.0f }, { "ratio", 2.0f }, { "attack", 10.0f },
         { "release", 0.4f }, { "autoRelease", 1.0f }, { "makeup", 0.0f },
         { "autoGain", 0.0f }, { "mix", 100.0f }, { "stereoLink", 100.0f },
-        { "scHpf", 0.0f }, { "oversampling", 0.0f }, { "softKnee", 0.0f },
+        { "scHpf", 0.0f }, { "oversampling", 0.0f }, { "softKnee", 0.0f }, { "mode", 0.0f }, { "colorAmount", 50.0f }, { "softClip", 0.0f }, { "clipThreshold", -3.0f }, { "clipKnee", 50.0f }
     });
     addPreset ("Drum Bus",
     {
@@ -28,7 +28,7 @@ PresetManager::PresetManager()
         { "threshold", -16.0f }, { "ratio", 3.0f }, { "attack", 10.0f },
         { "release", 0.5f }, { "autoRelease", 1.0f }, { "makeup", 2.0f },
         { "autoGain", 0.0f }, { "mix", 100.0f }, { "stereoLink", 100.0f },
-        { "scHpf", 0.0f }, { "oversampling", 0.0f }, { "softKnee", 0.0f },
+        { "scHpf", 0.0f }, { "oversampling", 0.0f }, { "softKnee", 0.0f }, { "mode", 0.0f }, { "colorAmount", 50.0f }, { "softClip", 0.0f }, { "clipThreshold", -3.0f }, { "clipKnee", 50.0f }
     });
     addPreset ("Fast Punch",
     {
@@ -42,7 +42,25 @@ PresetManager::PresetManager()
         { "threshold", -24.0f }, { "ratio", 10.0f }, { "attack", 3.0f },
         { "release", 0.8f }, { "autoRelease", 0.0f }, { "makeup", 6.0f },
         { "autoGain", 0.0f }, { "mix", 80.0f }, { "stereoLink", 100.0f },
-        { "scHpf", 0.0f }, { "oversampling", 0.0f }, { "softKnee", 1.0f },
+        { "scHpf", 0.0f }, { "oversampling", 0.0f }, { "softKnee", 1.0f }, { "mode", 0.0f }, { "colorAmount", 50.0f }, { "softClip", 0.0f }, { "clipThreshold", -3.0f }, { "clipKnee", 50.0f }
+    });
+    addPreset ("Clean Master",
+    {
+        { "threshold", -22.0f }, { "ratio", 2.0f }, { "attack", 20.0f },
+        { "release", 0.5f }, { "autoRelease", 1.0f }, { "makeup", 1.0f },
+        { "autoGain", 0.0f }, { "mix", 100.0f }, { "stereoLink", 100.0f },
+        { "scHpf", 0.0f }, { "oversampling", 0.0f }, { "softKnee", 0.0f },
+        { "mode", 0.0f }, { "colorAmount", 50.0f }, { "softClip", 0.0f },
+        { "clipThreshold", -3.0f }, { "clipKnee", 50.0f },
+    });
+    addPreset ("Color Master",
+    {
+        { "threshold", -20.0f }, { "ratio", 3.0f }, { "attack", 10.0f },
+        { "release", 0.4f }, { "autoRelease", 1.0f }, { "makeup", 2.0f },
+        { "autoGain", 0.0f }, { "mix", 100.0f }, { "stereoLink", 100.0f },
+        { "scHpf", 0.0f }, { "oversampling", 1.0f }, { "softKnee", 0.0f },
+        { "mode", 1.0f }, { "colorAmount", 60.0f }, { "softClip", 1.0f },
+        { "clipThreshold", -3.0f }, { "clipKnee", 50.0f },
     });
     addPreset ("Transparent Master Bus",
     {

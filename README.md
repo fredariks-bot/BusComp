@@ -1,9 +1,18 @@
-# BUS COMP – Professional VCA Bus Compressor (VST3)
+# BUS COMP – Clean / Color VCA Bus Compressor (VST3)
 
-BUS COMP ist ein professioneller, transparenter VCA-artiger Bus-Kompressor als
+BUS COMP ist ein professioneller, stereo-gekoppelter VCA-artiger Bus-Kompressor als
 VST3-Plugin für **Windows x64** (C++17, JUCE 8, CMake). Gedacht für Drum-Busse,
-Instrumentengruppen und den Mix-/Masterbus: kontrollierte Dynamikreduktion,
-stabile Stereomitte, musikalische Zeitkonstanten, keine künstliche Sättigung.
+Instrumentengruppen und den Mix-/Masterbus. Über einen zentralen Schalter ist der
+Klangcharakter umschaltbar:
+
+- **CLEAN**: transparente, saubere Kompression ohne hinzugefügte Sättigung.
+- **COLOR**: subtiler analog-inspirierter Charakter über eine eigene, kontinuierliche
+  Soft-Saturation-Kennlinie (`tanh`), mit einstellbarem COLOR AMOUNT (0–100 %).
+  Beide Modi sind echte, unterschiedliche DSP-Wege.
+
+Zusätzlich: zuschaltbarer **Soft Clipper** (nach der Parallelmischung, vor dem Makeup)
+mit Clip-Schwelle, Knee und Anzeige von maximaler Überschreitung (dB) und geclippten
+Samples (%).
 
 ## Funktionsumfang
 
@@ -23,8 +32,11 @@ stabile Stereomitte, musikalische Zeitkonstanten, keine künstliche Sättigung.
   100 % = voller Wet-Anteil)
 - **Oversampling** OFF / 2× / 4× (JUCE `dsp::Oversampling`, Polyphase-IIR-Halbbandfilter,
   integer Latency; Latenz wird an den Host gemeldet)
+- **CLEAN/COLOR-Umschalter** mit eigener Color-DSP (`Source/ColorDSP`) und **COLOR AMOUNT** 0–100 %
+- **Soft Clipper** (`Source/SoftClipper`): SOFT CLIP an/aus, Clip-Schwelle −12…0 dBFS,
+  CLIP KNEE 0–100 %, Anzeige von max. Überschreitung in dB und Anteil geclippter Samples
 - **Gain-Reduction-Meter** (0 … −20 dB, geglättet, Peak-Hold mit Reset, numerische Anzeige)
-  plus **Input-/Output-Peak- und RMS-Meter** mit Peak-Hold und Clip-Anzeige
+  plus **Input-/Output-Peak- und RMS-Meter** mit Peak-Hold, Clip-Anzeige und numerischen dB-Werten
 - **Vollständige VST3-Parameterautomatisierung** über `AudioProcessorValueTreeState`
 - **Presets**: Gentle Glue, Drum Bus, Mix Bus, Fast Punch, Heavy Compression,
   Transparent Master Bus (sinnvolle Ausgangspunkte, nicht „objektiv optimal")
@@ -39,8 +51,10 @@ stabile Stereomitte, musikalische Zeitkonstanten, keine künstliche Sättigung.
 ```
 CMakeLists.txt                  CMake-Konfiguration, JUCE 8.0.10 via FetchContent (GIT_TAG gepinnt)
 Source/ParameterDefs.h/.cpp     zentrale Parameterdefinitionen (IDs, Bereiche, Defaults)
-Source/CompressorDSP.h/.cpp     komplette Kompressor-Engine (Detektor, Kennlinie, Envelope,
-                                Auto Release, Auto Gain, Oversampling, Dry-Delay, Mix)
+Source/CompressorDSP.h/.cpp     komplette Engine: Detektor, Kennlinie, Envelope, Auto Release,
+                                CLEAN/COLOR, Mix, Soft Clipper, Auto Gain, Oversampling
+Source/ColorDSP.h/.cpp          COLOR-Sättigungsstufe (tanh-Soft-Saturation, pegelabgeglichen)
+Source/SoftClipper.h/.cpp       optionaler Soft Clipper inkl. Clip-Statistik
 Source/SidechainFilter.h/.cpp   4th-order-HP-Filter für den Sidechain-Pfad
 Source/GainReductionMeter.*     GR-Meter (geglättet + Peak-Hold, atomics)
 Source/LevelMeter.*             In/Out-Peak/RMS-Meter mit Hold und Clip (atomics)
@@ -49,6 +63,8 @@ Source/PluginProcessor.h/.cpp   AudioProcessor, APVTS, State, A/B, Latenz
 Source/PluginEditor.h/.cpp      eigene JUCE-GUI mit echten Metern
 Tests/TestMain.cpp              Konsolen-Testrunner (juce::UnitTestRunner)
 Tests/CompressorTests.cpp       DSP-Tests (Kennlinie, Attack/Release, Auto Release, Stereo, …)
+Tests/ColorTests.cpp            CLEAN/COLOR- und Soft-Clipper-Tests (Harmonische, DC, Pegelabgleich,
+                                Alias-Messung mit/ohne Oversampling, Clip-Statistik)
 Tests/ParameterTests.cpp        Parameter- und Preset-/State-Tests
 Tests/ProcessorStateTests.cpp   Processor-Tests (Automation, State-Roundtrip, Latenz, A/B)
 .github/workflows/build.yml     CI: Windows x64, VS2022, CMake Release, Tests, VST3-Artefakt
@@ -82,10 +98,10 @@ build\BusComp_artefacts\Release\VST3\BUS COMP.vst3
 `.github/workflows/build.yml` läuft bei Push und Pull Requests auf `windows-latest`
 (x64, VS 2022 preinstalliert), konfiguriert CMake (VS 2022, x64), baut Release,
 führt die Tests via `ctest` aus, prüft das VST3-Bundle und lädt das Artefakt
-**`BUS_COMP_VST3_Windows_x64`** (ZIP des `.vst3`-Bundles) hoch.
+**`BUS_COMP_Clean_Color_Windows_x64`** (ZIP des `.vst3`-Bundles) hoch.
 
 Artefakt herunterladen: GitHub → Actions → Workflow-Run → „Artifacts“ →
-`BUS_COMP_VST3_Windows_x64` → entpacken.
+`BUS_COMP_Clean_Color_Windows_x64` → entpacken.
 
 ## Installation des VST3
 
@@ -121,7 +137,12 @@ Program-Schnittstelle des Hosts (VST3-Programme = die sechs Factory-Presets).
 | STEREO LINK | 0 … 100 % | 100 % | Kopplung der Detektoren L/R |
 | SC HPF | Off, 20 … 300 Hz | Off | Hochpass nur im Sidechain-Detektor |
 | OVERSAMPLING | Off / 2× / 4× | Off | optionale Qualitäts-OS |
-| SOFT KNEE | Off/On | Off | 6-dB-Soft-Knee |
+| SOFT KNEE | Off/On | Off | 6-dB-Soft-Knee (Kompressor) |
+| MODE | CLEAN / COLOR | CLEAN | Klangmodus |
+| COLOR AMOUNT | 0 … 100 % | 50 % | Intensität der Color-Sättigung (nur in COLOR aktiv) |
+| SOFT CLIP | Off/On | Off | Soft-Clipper an/aus |
+| CLIP THR | −12 … 0 dBFS | −3 dBFS | Clip-Schwelle (nach Mix, vor Makeup) |
+| CLIP KNEE | 0 … 100 % | 50 % | Härte des Clipper-Knies |
 
 Alle Parameter sind VST3-automatisierbar (APVTS).
 
@@ -154,6 +175,37 @@ gemeinsame GR aus `max(|L|, |R|)` (Peak-Kombination). Die angewendete GR ist
 `link × GR_max + (1 − link) × GR_own`. Bei 100 % ist die GR beider Kanäle identisch
 (stabile Mitte), bei 0 % reagieren die Kanäle unabhängig.
 
+### Signalweg
+
+```
+Input → Sidechain-HPF (Detektor) → Kompressor (Kennlinie, Attack/Release, Stereo Link)
+      → CLEAN (Passthrough) oder COLOR (Soft Saturation, COLOR AMOUNT)
+      → Parallel-Mix (Dry/Wet) → Soft Clipper (optional) → Makeup/Auto Gain → Output-Meter
+```
+
+Der **Clip-Threshold ist am Punkt nach der Parallelmischung, vor dem Makeup definiert** –
+das Makeup kann also bewusst über die Schwelle hinaus verstärken (dokumentiert). Die
+GR-Anzeige zeigt ausschließlich die echte Kompressor-Gain-Reduction.
+
+### CLEAN vs. COLOR
+
+CLEAN ist bit-transparent, solange der Kompressor nicht regelt (getestet: max. Abweichung
+< 1e-6). COLOR verwendet `y = tanh(drive·x)/drive` mit `drive = 1 + 2·Amount`, also
+**Steigung 1 bei x = 0** – kleine Signale bleiben pegelgleich (Pegelabgleich CLEAN/COLOR
+im Test: < 1,5 dB RMS-Abweichung bei −20 dBFS Sinus). Größere Pegel erhalten dezente
+harmonische Anreicherung (im Test: messbares Residual > −40 dB rel. Signal, DC-Anteil
+< 1e-4). Amount 0 % = exakter Passthrough. Dynamische Signale können nicht in jeder
+Situation exakt gleich laut bleiben – das ist dokumentiert und wird nicht behauptet.
+
+### Soft Clipper
+
+Kontinuierliche, ungerade Kennlinie `y = sign(x)·t·tanh(d·|x|/t)/d` mit `t` = lineare
+Schwelle, `d = 1 + 6·Knee` – Steigung 1 bei 0, symmetrisch, speicherlos (kein DC-Offset),
+beim Ausschalten bit-transparent. Ein-/Ausblenden ist 10 ms geglättet (keine Klicks).
+Angezeigt werden max. Überschreitung in dB (Peak-Hold) und der Anteil geclippter Samples
+seit dem letzten Reset – direkt aus der DSP gemessen. COLOR und Soft Clipper laufen
+**gemeinsam in derselben Oversampling-Kette** (kein doppeltes Oversampling).
+
 ### Latenz
 
 OFF: 0 Samples. 2×/4×: die integer Latenz der JUCE-Oversampling-Filter
@@ -183,6 +235,12 @@ unterstützt (getestet).
 - Mix 0/50/100 %, Makeup, Auto Gain (inkl. Stille), Oversampling OFF/2×/4× inkl. Latenz
   und Umschalten, Sample-Rates 44,1–192 kHz, Stille, Rauschen, NaN-Checks,
   Parameter-Rampen während der Verarbeitung
+- CLEAN/COLOR: CLEAN ohne Sättigung, COLOR mit messbarer harmonischer Anreicherung,
+  Amount 0 % = Passthrough, DC-Offset, Pegelabgleich, Alias-Anteil OFF vs. 4×
+  (Goertzel-Messung; lokal gemessen: −100,6 dB OFF vs. −107,3 dB 4× rel. Grundton)
+- Soft Clipper: Bypass bit-exakt, symmetrisches Clipping am Threshold, verschiedene
+  Schwellen, Kleinsignal, Stats + Reset, Kombination mit COLOR/Mix, Alias-Verhalten
+- Sample-Rates 44,1 / 48 / 88,2 / 96 / 176,4 / 192 kHz
 - Parameter-Layout (IDs, Bereiche, Defaults), Presets, State-Roundtrip, korrupte States
 - Processor: Automation (`setValueNotifyingHost`), State-Roundtrip, A/B, Latenz-Meldung
 

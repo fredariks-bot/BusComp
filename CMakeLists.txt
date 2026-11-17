@@ -56,6 +56,8 @@ juce_add_plugin(BusComp
 target_sources(BusComp PRIVATE
     Source/ParameterDefs.cpp
     Source/CompressorDSP.cpp
+    Source/ColorDSP.cpp
+    Source/SoftClipper.cpp
     Source/SidechainFilter.cpp
     Source/GainReductionMeter.cpp
     Source/LevelMeter.cpp
@@ -80,10 +82,13 @@ juce_add_console_app(BusCompTests
 target_sources(BusCompTests PRIVATE
     Tests/TestMain.cpp
     Tests/CompressorTests.cpp
+    Tests/ColorTests.cpp
     Tests/ParameterTests.cpp
     Tests/ProcessorStateTests.cpp
     Source/ParameterDefs.cpp
     Source/CompressorDSP.cpp
+    Source/ColorDSP.cpp
+    Source/SoftClipper.cpp
     Source/SidechainFilter.cpp
     Source/GainReductionMeter.cpp
     Source/LevelMeter.cpp

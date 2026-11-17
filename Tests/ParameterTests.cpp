@@ -16,7 +16,8 @@ public:
         beginTest ("All required parameters exist");
         const juce::StringArray required {
             "threshold", "ratio", "attack", "release", "autoRelease", "makeup",
-            "autoGain", "mix", "stereoLink", "scHpf", "oversampling", "softKnee"
+            "autoGain", "mix", "stereoLink", "scHpf", "oversampling", "softKnee",
+            "mode", "colorAmount", "softClip", "clipThreshold", "clipKnee"
         };
         for (const auto& id : required)
             expect (buscomp::findParamDef (id) != nullptr, "missing parameter id: " + id);
@@ -63,6 +64,11 @@ public:
         const auto* os = rangeOf ("oversampling");
         expect (os->choices.size() == 3 && os->choices[0] == "Off"
                 && os->choices[1] == "2x" && os->choices[2] == "4x");
+        const auto* mode = rangeOf ("mode");
+        expect (mode->type == buscomp::ParamType::Choice
+                && mode->choices[0] == "CLEAN" && mode->choices[1] == "COLOR");
+        expect (rangeOf ("colorAmount")->minValue == 0.0f && rangeOf ("colorAmount")->maxValue == 100.0f);
+        expect (rangeOf ("clipThreshold")->minValue == -12.0f && rangeOf ("clipThreshold")->maxValue == 0.0f);
     }
 };
 
@@ -80,10 +86,11 @@ public:
 
         beginTest ("All required factory presets exist");
         const juce::StringArray required {
-            "Gentle Glue", "Drum Bus", "Mix Bus", "Fast Punch", "Heavy Compression", "Transparent Master Bus"
+            "Gentle Glue", "Drum Bus", "Mix Bus", "Fast Punch", "Heavy Compression",
+            "Transparent Master Bus", "Clean Master", "Color Master"
         };
         const auto names = pm.getPresetNames();
-        expect (pm.getNumPresets() >= 6);
+        expect (pm.getNumPresets() >= 8);
         for (const auto& r : required)
             expect (names.contains (r), "missing preset: " + r);
 

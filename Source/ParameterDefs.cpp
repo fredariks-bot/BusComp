@@ -21,6 +21,12 @@ const std::vector<ParamDef>& parameterDefs()
         { "oversampling", "Oversampling",  ParamType::Choice,  0.0f,   0.0f,   0.0f, 0.0f,
           { "Off", "2x", "4x" }, "" },
         { "softKnee",     "Soft Knee",     ParamType::Bool,    0.0f,   1.0f,   0.0f, 0.0f,  {}, ""    },
+        { "mode",         "Mode",          ParamType::Choice,  0.0f,   0.0f,   0.0f, 0.0f,
+          { "CLEAN", "COLOR" }, "" },
+        { "colorAmount",  "Color Amount",  ParamType::Float,   0.0f, 100.0f,  50.0f, 0.1f,  {}, "%"   },
+        { "softClip",     "Soft Clip",     ParamType::Bool,    0.0f,   1.0f,   0.0f, 0.0f,  {}, ""    },
+        { "clipThreshold","Clip Threshold",ParamType::Float, -12.0f,   0.0f,  -3.0f, 0.1f,  {}, "dBFS"},
+        { "clipKnee",     "Clip Knee",     ParamType::Float,   0.0f, 100.0f,  50.0f, 0.1f,  {}, "%"   },
     };
     return defs;
 }

@@ -83,9 +83,10 @@ void BusCompLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton
 }
 
 //==============================================================================
-KnobComponent::KnobComponent (juce::AudioProcessorValueTreeState& apvts, const juce::String& paramId)
+KnobComponent::KnobComponent (juce::AudioProcessorValueTreeState& apvts, const juce::String& id)
+    : paramId (id)
 {
-    def = findParamDef (paramId);
+    def = findParamDef (id);
     jassert (def != nullptr);
 
     slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
@@ -111,7 +112,7 @@ KnobComponent::KnobComponent (juce::AudioProcessorValueTreeState& apvts, const j
     addAndMakeVisible (valueLabel);
     updateValueLabel();
 
-    attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (apvts, paramId, slider);
+    attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (apvts, id, slider);
 }
 
 void KnobComponent::resized()
@@ -327,6 +328,14 @@ BusCompEditor::BusCompEditor (BusCompProcessor& p)
     };
     addAndMakeVisible (abButton);
 
+    const auto* modeDef = findParamDef ("mode");
+    for (int i = 0; i < modeDef->choices.size(); ++i)
+        modeCombo.addItem (modeDef->choices[i], i + 1);
+    modeCombo.setSelectedId ((int) processorRef.getParamValue ("mode") + 1, juce::dontSendNotification);
+    modeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
+        processorRef.apvts, "mode", modeCombo);
+    addAndMakeVisible (modeCombo);
+
     const auto* osDef = findParamDef ("oversampling");
     for (int i = 0; i < osDef->choices.size(); ++i)
         osCombo.addItem (osDef->choices[i], i + 1);
@@ -348,13 +357,14 @@ BusCompEditor::BusCompEditor (BusCompProcessor& p)
         processorRef.apvts, "scHpf", scHpfCombo);
     addAndMakeVisible (scHpfCombo);
 
-    for (const auto* id : { "attack", "release", "threshold", "ratio", "makeup", "mix", "stereoLink" })
+    for (const auto* id : { "attack", "release", "threshold", "ratio", "makeup",
+                            "mix", "stereoLink", "colorAmount", "clipThreshold", "clipKnee" })
     {
         knobs.push_back (std::make_unique<KnobComponent> (processorRef.apvts, id));
         addAndMakeVisible (*knobs.back());
     }
 
-    for (const auto* id : { "autoRelease", "softKnee", "autoGain" })
+    for (const auto* id : { "autoRelease", "softKnee", "autoGain", "softClip" })
     {
         const auto* def = findParamDef (id);
         auto button = std::make_unique<juce::ToggleButton> (def->name.toUpperCase());
@@ -366,12 +376,17 @@ BusCompEditor::BusCompEditor (BusCompProcessor& p)
 
     addAndMakeVisible (meterComponent);
 
+    clipLabel.setJustificationType (juce::Justification::centred);
+    clipLabel.setColour (juce::Label::textColourId, colTextDim());
+    clipLabel.setFont (juce::Font (juce::FontOptions (10.0f)));
+    addAndMakeVisible (clipLabel);
+
     resetButton.onClick = [this] { processorRef.resetMeters(); };
     addAndMakeVisible (resetButton);
 
-    setSize (1000, 600);
+    setSize (1060, 660);
     setResizable (true, true);
-    setResizeLimits (760, 460, 1600, 1000);
+    setResizeLimits (820, 520, 1600, 1100);
 
     startTimerHz (30);
 }
@@ -402,36 +417,46 @@ void BusCompEditor::resized()
     titleLabel.setBounds (header.removeFromLeft (130));
     header.removeFromLeft (10);
     abButton.setBounds (header.removeFromRight (52).reduced (2));
+    modeCombo.setBounds (header.removeFromRight (76).reduced (2));
     osCombo.setBounds (header.removeFromRight (64).reduced (2));
     presetCombo.setBounds (header.removeFromRight (180).reduced (2));
 
-    auto meters = area.removeFromRight (juce::jmax (220, area.getWidth() / 4));
+    auto meters = area.removeFromRight (juce::jmax (250, area.getWidth() / 4));
     auto resetArea = meters.removeFromBottom (30).reduced (8, 4);
     resetButton.setBounds (resetArea);
+    auto clipArea = meters.removeFromBottom (22).reduced (8, 2);
+    clipLabel.setBounds (clipArea);
     meterComponent.setBounds (meters.reduced (6));
 
     auto controls = area.reduced (10);
-    auto row2 = controls.removeFromBottom (juce::jmax (120, controls.getHeight() / 3));
+    const int nBig = 5;
+    auto bigRow = controls.removeFromTop (juce::jmax (150, controls.getHeight() * 45 / 100));
+    auto switchRow = controls.removeFromBottom (juce::jmax (34, controls.getHeight() / 5));
+    auto smallRow = controls; // remaining middle row for the smaller knobs
 
-    juce::FlexBox knobRow;
-    knobRow.flexDirection = juce::FlexBox::Direction::row;
-    knobRow.justifyContent = juce::FlexBox::JustifyContent::spaceBetween;
-    for (size_t i = 0; i < 5 && i < knobs.size(); ++i)
-        knobRow.items.add (juce::FlexItem (*knobs[i]).withFlex (1.0f).withMinWidth (90.0f));
-    knobRow.performLayout (controls.toFloat());
+    juce::FlexBox fb;
+    fb.flexDirection = juce::FlexBox::Direction::row;
+    fb.justifyContent = juce::FlexBox::JustifyContent::spaceBetween;
+    for (size_t i = 0; i < (size_t) nBig && i < knobs.size(); ++i)
+        fb.items.add (juce::FlexItem (*knobs[i]).withFlex (1.0f).withMinWidth (90.0f));
+    fb.performLayout (bigRow.toFloat());
 
-    juce::FlexBox lowerRow;
-    lowerRow.flexDirection = juce::FlexBox::Direction::row;
-    lowerRow.justifyContent = juce::FlexBox::JustifyContent::spaceBetween;
-    lowerRow.alignItems = juce::FlexBox::AlignItems::center;
-    for (size_t i = 5; i < knobs.size(); ++i)
-        lowerRow.items.add (juce::FlexItem (*knobs[i]).withFlex (1.0f).withMinWidth (90.0f));
+    juce::FlexBox smallFb;
+    smallFb.flexDirection = juce::FlexBox::Direction::row;
+    smallFb.justifyContent = juce::FlexBox::JustifyContent::spaceBetween;
+    for (size_t i = nBig; i < knobs.size(); ++i)
+        smallFb.items.add (juce::FlexItem (*knobs[i]).withFlex (1.0f).withMinWidth (80.0f).withMinHeight (86.0f));
+    smallFb.performLayout (smallRow.toFloat());
 
+    juce::FlexBox swFb;
+    swFb.flexDirection = juce::FlexBox::Direction::row;
+    swFb.justifyContent = juce::FlexBox::JustifyContent::spaceBetween;
+    swFb.alignItems = juce::FlexBox::AlignItems::center;
     for (auto& t : toggles)
-        lowerRow.items.add (juce::FlexItem (*t).withWidth (86.0f).withHeight (26.0f).withMargin (4.0f));
-    lowerRow.items.add (juce::FlexItem (scHpfLabel).withWidth (60.0f).withHeight (16.0f));
-    lowerRow.items.add (juce::FlexItem (scHpfCombo).withWidth (86.0f).withHeight (26.0f).withMargin (4.0f));
-    lowerRow.performLayout (row2.toFloat());
+        swFb.items.add (juce::FlexItem (*t).withWidth (92.0f).withHeight (26.0f).withMargin (4.0f));
+    swFb.items.add (juce::FlexItem (scHpfLabel).withWidth (60.0f).withHeight (16.0f));
+    swFb.items.add (juce::FlexItem (scHpfCombo).withWidth (92.0f).withHeight (26.0f).withMargin (4.0f));
+    swFb.performLayout (switchRow.toFloat());
 }
 
 void BusCompEditor::timerCallback()
@@ -459,6 +484,31 @@ void BusCompEditor::timerCallback()
         presetCombo.setSelectedId (index >= 0 ? index + 1 : 0, juce::dontSendNotification);
     }
     abButton.setToggleState (processorRef.isABActive(), juce::dontSendNotification);
+
+    const bool colorMode = processorRef.getParamValue ("mode") >= 0.5f;
+    const bool clipOn = processorRef.getParamValue ("softClip") >= 0.5f;
+    for (auto& k : knobs)
+    {
+        if (k->paramId == "colorAmount")
+            k->setEnabled (colorMode);
+        else if (k->paramId == "clipThreshold" || k->paramId == "clipKnee")
+            k->setEnabled (clipOn);
+    }
+
+    if (clipOn)
+    {
+        const float over = processorRef.getClipMaxOvershootDb();
+        const float ratio = processorRef.getClipRatio();
+        clipLabel.setText ("CLIP pk +" + juce::String (over, 1) + " dB  ·  "
+                           + juce::String (ratio * 100.0f, 1) + " % clipped",
+                           juce::dontSendNotification);
+        clipLabel.setColour (juce::Label::textColourId, over > 0.0f ? colAccent() : colTextDim());
+    }
+    else
+    {
+        clipLabel.setText ("SOFT CLIP off", juce::dontSendNotification);
+        clipLabel.setColour (juce::Label::textColourId, colTextDim());
+    }
 }
 
 } // namespace buscomp

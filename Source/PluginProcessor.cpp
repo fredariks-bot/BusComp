@@ -94,6 +94,11 @@ CompressorDSP::Settings BusCompProcessor::readSettings() const
 
     s.softKnee     = getParamValue ("softKnee") >= 0.5f;
     s.oversampling = (int) juce::jlimit (0.0f, 2.0f, getParamValue ("oversampling"));
+    s.colorMode    = getParamValue ("mode") >= 0.5f; // 0 = CLEAN, 1 = COLOR
+    s.colorAmount  = getParamValue ("colorAmount") / 100.0f;
+    s.softClipOn   = getParamValue ("softClip") >= 0.5f;
+    s.clipThresholdDb = getParamValue ("clipThreshold");
+    s.clipKnee     = getParamValue ("clipKnee") / 100.0f;
     return s;
 }
 

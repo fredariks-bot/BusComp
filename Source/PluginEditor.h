@@ -23,6 +23,7 @@ class KnobComponent final : public juce::Component
 {
 public:
     KnobComponent (juce::AudioProcessorValueTreeState& apvts, const juce::String& paramId);
+    juce::String paramId;
     void resized() override;
     void updateValueLabel();
 
@@ -72,10 +73,12 @@ private:
     juce::Label  titleLabel { {}, "BUS COMP" };
     juce::ComboBox presetCombo;
     juce::ToggleButton abButton { "A/B" };
+    juce::ComboBox modeCombo;
     juce::ComboBox osCombo;
     juce::Label  scHpfLabel { {}, "SC HPF" };
     juce::ComboBox scHpfCombo;
 
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> osAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> scHpfAttachment;
 
@@ -85,6 +88,7 @@ private:
     std::vector<juce::Label*> toggleLabels;
 
     MeterComponent meterComponent;
+    juce::Label  clipLabel { {}, "CLIP" };
     juce::TextButton resetButton { "RESET" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (BusCompEditor)
