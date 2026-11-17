@@ -89,12 +89,18 @@ private:
 
     CompressorDSP::Settings readSettings() const;
 
-    static const juce::ValueTree* findParamChild (const juce::ValueTree& state, const juce::String& id)
+    static bool getParamValueFromState (const juce::ValueTree& state, const juce::String& id, float& out)
     {
-        for (auto child : state)
+        for (int i = 0; i < state.getNumChildren(); ++i)
+        {
+            const auto child = state.getChild (i);
             if (child.hasType ("PARAM") && child.getProperty ("id").toString() == id)
-                return &child;
-        return nullptr;
+            {
+                out = (float) child.getProperty ("value");
+                return true;
+            }
+        }
+        return false;
     }
 
     juce::String currentPresetName { "Gentle Glue" };

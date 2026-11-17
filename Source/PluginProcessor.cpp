@@ -219,8 +219,11 @@ void BusCompProcessor::setStateInformation (const void* data, int sizeInBytes)
     loadingPreset = true;
     apvts.replaceState (incoming.createCopy());
     for (const auto& def : parameterDefs())
-        if (auto* child = findParamChild (incoming, def.id))
-            setParamValue (def.id, (float) child->getProperty ("value"));
+    {
+        float value = 0.0f;
+        if (getParamValueFromState (incoming, def.id, value))
+            setParamValue (def.id, value);
+    }
     loadingPreset = false;
 
     if (incoming.hasProperty ("presetName"))
