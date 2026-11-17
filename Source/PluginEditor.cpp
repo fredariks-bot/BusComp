@@ -159,9 +159,11 @@ void MeterComponent::paint (juce::Graphics& g)
     const float pad = 8.0f;
     area.reduce (pad, pad);
 
+    // dedicated readout strip at the bottom: always fully visible, fixed height
+    auto readout = area.removeFromBottom (36.0f);
+
     // ---- gain reduction meter (left, large) ----
     auto grArea = area.removeFromLeft (70.0f).reduced (4.0f, 0.0f);
-    grArea.removeFromBottom (30.0f); // room for the numeric dB readout
     const float grTop = grArea.getY();
     const float grBottom = grArea.getBottom();
     const float grHeight = grBottom - grTop;
@@ -181,7 +183,7 @@ void MeterComponent::paint (juce::Graphics& g)
     // zero mark
     g.setColour (colText());
     g.drawLine (grArea.getX(), grTop, grArea.getRight(), grTop, 1.5f);
-    // grid lines every 5 dB
+    // grid lines every 5 dB with numeric labels
     g.setColour (colPanelEdge().brighter (0.4f));
     g.setFont (juce::Font (juce::FontOptions (9.0f)));
     for (int db = 5; db <= 20; db += 5)
@@ -189,8 +191,8 @@ void MeterComponent::paint (juce::Graphics& g)
         const float y = grBottom - (db / grMax) * grHeight;
         g.drawLine (grArea.getX(), y, grArea.getRight(), y, 1.0f);
         g.setColour (colTextDim());
-        g.drawText (juce::String (-db), (int) grArea.getRight() + 2, (int) y - 6, 24, 12,
-                    juce::Justification::left);
+        g.drawText (juce::String (-db), (int) grArea.getX() + 2, (int) y - 6,
+                    (int) grArea.getWidth() - 4, 12, juce::Justification::right);
         g.setColour (colPanelEdge().brighter (0.4f));
     }
 
@@ -198,17 +200,6 @@ void MeterComponent::paint (juce::Graphics& g)
     const float peakY = grBottom - dbToNorm (-grPeakDb, -grMax, 0.0f) * grHeight;
     g.setColour (colAccent());
     g.drawLine (grArea.getX() - 2, peakY, grArea.getRight() + 2, peakY, 2.0f);
-
-    // numeric readout: current GR and peak-hold value in dB
-    g.setColour (colText());
-    g.setFont (juce::Font (juce::FontOptions (13.0f).withStyle ("Bold")));
-    g.drawFittedText (juce::String (-grDb, 1) + " dB", grArea.withY (grBottom + 2).toNearestInt(),
-                      juce::Justification::centred, 1);
-
-    g.setColour (colAccent());
-    g.setFont (juce::Font (juce::FontOptions (9.0f)));
-    g.drawFittedText ("pk " + juce::String (-grPeakDb, 1) + " dB",
-                      grArea.withY (grBottom + 15).toNearestInt(), juce::Justification::centred, 1);
 
     g.setColour (colTextDim());
     g.setFont (juce::Font (juce::FontOptions (10.0f)));
@@ -218,13 +209,11 @@ void MeterComponent::paint (juce::Graphics& g)
     auto rest = area.removeFromLeft (area.getWidth() - 70.0f - pad);
     auto inArea  = rest.removeFromLeft (rest.getWidth() * 0.5f).reduced (4.0f, 0.0f);
     auto outArea = rest.reduced (4.0f, 0.0f);
-    inArea.removeFromBottom (18.0f);  // room for the numeric dB readout
-    outArea.removeFromBottom (18.0f);
 
     constexpr float lvlMin = -60.0f, lvlMax = 0.0f;
 
     auto drawLevelMeter = [&] (juce::Rectangle<float> mArea, const float* db, const float* holdDb,
-                               bool clip0, bool clip1, const juce::String& title)
+                               bool clip0, bool clip1)
     {
         g.setColour (colPanelEdge());
         g.fillRoundedRectangle (mArea, 3.0f);
@@ -237,9 +226,9 @@ void MeterComponent::paint (juce::Graphics& g)
             const float norm = dbToNorm (db[ch], lvlMin, lvlMax);
             const float y = bar.getBottom() - norm * bar.getHeight();
 
-            auto grad = juce::ColourGradient (colMeterGreen(), bar.getX(), bar.getBottom(),
-                                               colMeterRed(), bar.getX(), bar.getY(), false);
-            g.setGradientFill (grad);
+            auto lgrad = juce::ColourGradient (colMeterGreen(), bar.getX(), bar.getBottom(),
+                                                colMeterRed(), bar.getX(), bar.getY(), false);
+            g.setGradientFill (lgrad);
             g.fillRoundedRectangle (juce::Rectangle<float> (bar.getX(), y, barW, bar.getBottom() - y), 2.0f);
 
             const float holdY = bar.getBottom() - dbToNorm (holdDb[ch], lvlMin, lvlMax) * bar.getHeight();
@@ -253,34 +242,55 @@ void MeterComponent::paint (juce::Graphics& g)
             }
         }
 
-        // scale marks
+        // scale marks with numeric labels
         g.setColour (colPanelEdge().brighter (0.4f));
         g.setFont (juce::Font (juce::FontOptions (9.0f)));
         for (int db = -60; db <= 0; db += 20)
         {
             const float y = mArea.getBottom() - ((db - lvlMin) / (lvlMax - lvlMin)) * mArea.getHeight();
             g.drawLine (mArea.getX(), y, mArea.getRight(), y, 1.0f);
+            g.setColour (colTextDim());
+            g.drawText (juce::String (db), (int) mArea.getX() + 2, (int) y - 6,
+                        (int) mArea.getWidth() - 4, 12, juce::Justification::right);
+            g.setColour (colPanelEdge().brighter (0.4f));
         }
+    };
 
-        // bottom line: name plus numeric dB values of both channels
-        auto fmtDb = [] (float db) -> juce::String
-        {
-            return db <= -100.0f ? juce::String ("-inf") : juce::String (db, 1);
-        };
+    drawLevelMeter (inArea,  inDb,  inHoldDb,  inClip[0],  inClip[1]);
+    drawLevelMeter (outArea, outDb, outHoldDb, outClip[0], outClip[1]);
+
+    // ---- numeric readout strip (always fully visible) ----
+    auto fmtDb = [] (float db) -> juce::String
+    {
+        return db <= -100.0f ? juce::String ("-inf") : juce::String (db, 1);
+    };
+
+    // GR: current value (bold) + peak-hold value
+    auto grReadout = readout.removeFromLeft (70.0f).reduced (2.0f, 0.0f);
+    g.setColour (colText());
+    g.setFont (juce::Font (juce::FontOptions (14.0f).withStyle ("Bold")));
+    g.drawFittedText (juce::String (-grDb, 1) + " dB", grReadout.removeFromTop (19.0f).toNearestInt(),
+                      juce::Justification::centred, 1);
+    g.setColour (colAccent());
+    g.setFont (juce::Font (juce::FontOptions (10.0f)));
+    g.drawFittedText ("pk " + juce::String (-grPeakDb, 1), grReadout.toNearestInt(),
+                      juce::Justification::centred, 1);
+
+    // IN / OUT: name left, numeric dB values (L/R) right
+    auto drawReadout = [&] (juce::Rectangle<float> mArea, const juce::String& title, const float* db)
+    {
+        auto r = juce::Rectangle<float> (mArea.getX(), readout.getY(), mArea.getWidth(), readout.getHeight());
         g.setColour (colTextDim());
         g.setFont (juce::Font (juce::FontOptions (10.0f)));
-        g.drawFittedText (title, mArea.withY (mArea.getBottom() + 2).toNearestInt(),
-                          juce::Justification::left, 1);
-
+        g.drawFittedText (title, r.toNearestInt(), juce::Justification::left, 1);
         g.setColour (colText());
-        g.setFont (juce::Font (juce::FontOptions (11.0f).withStyle ("Bold")));
-        g.drawFittedText (fmtDb (db[0]) + " / " + fmtDb (db[1]) + " dB",
-                          mArea.withY (mArea.getBottom() + 2).toNearestInt(),
+        g.setFont (juce::Font (juce::FontOptions (12.0f).withStyle ("Bold")));
+        g.drawFittedText (fmtDb (db[0]) + " / " + fmtDb (db[1]) + " dB", r.toNearestInt(),
                           juce::Justification::right, 1);
     };
 
-    drawLevelMeter (inArea,  inDb,  inHoldDb,  inClip[0],  inClip[1],  "IN");
-    drawLevelMeter (outArea, outDb, outHoldDb, outClip[0], outClip[1], "OUT");
+    drawReadout (inArea, "IN", inDb);
+    drawReadout (outArea, "OUT", outDb);
 }
 
 //==============================================================================
