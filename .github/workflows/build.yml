@@ -6,9 +6,10 @@ on:
 
 jobs:
   build:
-    # windows-latest provides a Windows 11-compatible x64 runner with the
-    # Visual Studio 2022 C++ build tools (MSVC) preinstalled.
-    runs-on: windows-latest
+    # windows-2022 provides a Windows x64 runner with the Visual Studio 2022
+    # C++ build tools (MSVC) preinstalled; the produced VST3 targets
+    # Windows 10/11 x64.
+    runs-on: windows-2022
 
     steps:
       - name: Checkout
