@@ -1,0 +1,51 @@
+name: Build BUS COMP (VST3, Windows x64)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    # windows-latest provides a Windows 11-compatible x64 runner with the
+    # Visual Studio 2022 C++ build tools (MSVC) preinstalled.
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Configure CMake (VS 2022, x64, Release)
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build plugin and tests (Release)
+        run: cmake --build build --config Release --parallel
+
+      - name: Run DSP / parameter / state tests
+        run: ctest --test-dir build --output-on-failure -C Release
+
+      - name: Verify VST3 bundle exists and is complete
+        shell: powershell
+        run: |
+          $bundle = "build/BusComp_artefacts/Release/VST3/BUS COMP.vst3"
+          $binary = "$bundle/Contents/x86_64-win/BUS COMP.vst3"
+          $moduleinfo = "$bundle/Contents/Resources/moduleinfo.json"
+          if (!(Test-Path $binary)) { throw "VST3 binary missing: $binary" }
+          if (!(Test-Path $moduleinfo)) { throw "moduleinfo.json missing" }
+          Write-Host "VST3 bundle OK: $bundle"
+          Get-ChildItem -Recurse $bundle | Select-Object FullName, Length
+
+      - name: Package VST3 bundle as artifact
+        shell: powershell
+        run: |
+          Compress-Archive -Path "build/BusComp_artefacts/Release/VST3/BUS COMP.vst3" `
+                           -DestinationPath "BUS_COMP_VST3_Windows_x64.zip" -Force
+          if (!(Test-Path "BUS_COMP_VST3_Windows_x64.zip")) { throw "zip failed" }
+
+      - name: Upload artifact BUS_COMP_VST3_Windows_x64
+        uses: actions/upload-artifact@v4.5.0
+        with:
+          name: BUS_COMP_VST3_Windows_x64
+          path: BUS_COMP_VST3_Windows_x64.zip
+          retention-days: 30
